@@ -1,5 +1,6 @@
 """User repository and data access functions for AEGIS-CORE."""
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -24,6 +25,11 @@ class UserRepository(BaseRepository[User]):
         statement = select(User).where(User.email == email)
         return self.session.scalars(statement).first()
 
+    def list_users(self, skip: int = 0, limit: int = 100) -> Sequence[User]:
+        """Fetch all users sorted by ID ascending."""
+        statement = select(User).order_by(User.id.asc()).offset(skip).limit(limit)
+        return self.session.scalars(statement).all()
+
     def create_user(
         self,
         display_name: str,
@@ -47,3 +53,8 @@ def get_user_by_id(session: Session, user_id: int) -> User | None:
 def get_user_by_email(session: Session, email: str) -> User | None:
     """Standalone functional query to retrieve a user by email address."""
     return UserRepository(session).get_by_email(email)
+
+
+def list_users(session: Session, skip: int = 0, limit: int = 100) -> Sequence[User]:
+    """Standalone functional query to list users."""
+    return UserRepository(session).list_users(skip=skip, limit=limit)

@@ -15,6 +15,7 @@ from app.repositories.user import (
     UserRepository,
     get_user_by_email,
     get_user_by_id,
+    list_users,
 )
 
 __all__ = [
@@ -26,4 +27,5 @@ __all__ = [
     "get_user_by_email",
     "get_user_by_id",
     "list_emails_by_owner",
+    "list_users",
 ]

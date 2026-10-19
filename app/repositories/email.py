@@ -25,14 +25,20 @@ class EmailRepository(BaseRepository[EmailMessage]):
         owner_id: int,
         skip: int = 0,
         limit: int = 100,
+        is_read: bool | None = None,
         unread_only: bool = False,
     ) -> Sequence[EmailMessage]:
-        """Fetch emails belonging strictly to the specified owner, ordered by received_at descending."""
+        """Fetch emails belonging strictly to the specified owner, ordered by received_at desc then id desc."""
         query = select(EmailMessage).where(EmailMessage.owner_id == owner_id)
-        if unread_only:
+        if is_read is not None:
+            query = query.where(EmailMessage.is_read.is_(is_read))
+        elif unread_only:
             query = query.where(EmailMessage.is_read.is_(False))
+
         query = (
-            query.order_by(EmailMessage.received_at.desc()).offset(skip).limit(limit)
+            query.order_by(EmailMessage.received_at.desc(), EmailMessage.id.desc())
+            .offset(skip)
+            .limit(limit)
         )
         return self.session.scalars(query).all()
 
@@ -51,13 +57,16 @@ class EmailRepository(BaseRepository[EmailMessage]):
     def count_by_owner(
         self,
         owner_id: int,
+        is_read: bool | None = None,
         unread_only: bool = False,
     ) -> int:
         """Count total emails belonging to the specified owner."""
         query = select(func.count(EmailMessage.id)).where(
             EmailMessage.owner_id == owner_id
         )
-        if unread_only:
+        if is_read is not None:
+            query = query.where(EmailMessage.is_read.is_(is_read))
+        elif unread_only:
             query = query.where(EmailMessage.is_read.is_(False))
         result = self.session.scalar(query)
         return int(result or 0)
@@ -92,6 +101,7 @@ def list_emails_by_owner(
     owner_id: int,
     skip: int = 0,
     limit: int = 100,
+    is_read: bool | None = None,
     unread_only: bool = False,
 ) -> Sequence[EmailMessage]:
     """Retrieve emails scoped to an owner with optional pagination and unread filtering."""
@@ -99,6 +109,7 @@ def list_emails_by_owner(
         owner_id=owner_id,
         skip=skip,
         limit=limit,
+        is_read=is_read,
         unread_only=unread_only,
     )
 
@@ -118,10 +129,12 @@ def get_email_by_id_and_owner(
 def count_emails_by_owner(
     session: Session,
     owner_id: int,
+    is_read: bool | None = None,
     unread_only: bool = False,
 ) -> int:
     """Count emails owned by the specified user."""
     return EmailRepository(session).count_by_owner(
         owner_id=owner_id,
+        is_read=is_read,
         unread_only=unread_only,
     )

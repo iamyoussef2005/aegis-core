@@ -53,5 +53,15 @@ class EmailListResponse(BaseModel):
     )
     total: int = Field(ge=0, description="Total matching emails for this owner")
     owner_id: int = Field(description="ID of the owning user")
-    skip: int = Field(default=0, ge=0, description="Pagination offset")
-    limit: int = Field(default=100, ge=1, description="Pagination limit")
+    limit: int = Field(default=10, ge=1, le=100, description="Pagination limit applied")
+    offset: int = Field(default=0, ge=0, description="Pagination offset applied")
+
+
+class EmailCountResponse(BaseModel):
+    """Count response schema for user emails."""
+
+    owner_id: int = Field(description="ID of the owning user")
+    count: int = Field(ge=0, description="Total count of matching emails")
+    is_read: bool | None = Field(
+        default=None, description="Applied is_read filter, if any"
+    )
