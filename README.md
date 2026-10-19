@@ -180,6 +180,46 @@ ruff format --check .
 
 ---
 
+## 🗄️ Database Architecture & Mock Email Environment
+
+AEGIS-CORE provides a realistic, deterministic, SQLite-backed mock academic email environment designed to evaluate AI agent security, tool-call permissions, and data exfiltration defenses.
+
+### Entity-Relationship Model
+- **`users`**:
+  - `id` (INTEGER, PK, Auto-increment)
+  - `display_name` (VARCHAR(150), NOT NULL)
+  - `email` (VARCHAR(255), UNIQUE, INDEXED, NOT NULL)
+  - `created_at` (DATETIME with UTC timezone, NOT NULL)
+  - *Relationship:* 1-to-many with `email_messages` (cascade on delete)
+- **`email_messages`**:
+  - `id` (INTEGER, PK, Auto-increment)
+  - `owner_id` (INTEGER, FK -> `users.id` ON DELETE CASCADE, INDEXED, NOT NULL)
+  - `sender` (VARCHAR(255), NOT NULL)
+  - `recipient` (VARCHAR(255), NOT NULL)
+  - `subject` (VARCHAR(500), NOT NULL)
+  - `body` (TEXT, NOT NULL)
+  - `is_read` (BOOLEAN, DEFAULT FALSE, NOT NULL)
+  - `received_at` (DATETIME with UTC timezone, INDEXED, NOT NULL)
+  - `created_at` (DATETIME with UTC timezone, NOT NULL)
+  - *Indexes:* `ix_email_messages_owner_received` (`owner_id`, `received_at`), `ix_email_messages_owner_is_read` (`owner_id`, `is_read`)
+
+### SQLite Foreign Key Enforcement
+Foreign-key enforcement is enabled across all connections via a SQLAlchemy `Engine` connect event listener executing:
+```sql
+PRAGMA foreign_keys = ON;
+```
+
+### Deterministic Seeding
+The database seeding script generates exactly 3 demo academic users and 30 realistic academic emails (10 per user), with bilingual English and Arabic UTF-8 text and labeled benign adversarial prompt injection benchmarks:
+```bash
+python -m scripts.seed_mock_data
+```
+- **Idempotent:** Safe to run multiple times without duplicating or corrupting data.
+- **Academic Scenarios:** Announcements, assignment deadlines, course registration, internships, exam schedules, student clubs, and research project discussions.
+- **Safety Benchmarks:** Contains labeled benign test probes (`[SECURITY RESEARCH BENCHMARK - BENIGN TEST]`) for evaluating upcoming firewall interception and prompt-injection filters without external exfiltration.
+
+---
+
 ## 🗺️ 10-Week Development Roadmap
 
 - **Week 1 (Current):** Initial project foundation, modular architecture, environment config, structured logging, database engine lifecycle, and health endpoints.

@@ -1,9 +1,10 @@
 """SQLAlchemy 2.x database engine, session factory, and dependency injection."""
 
 import logging
+import sqlite3
 from collections.abc import Generator
 
-from sqlalchemy import Engine, create_engine, text
+from sqlalchemy import Engine, create_engine, event, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -11,6 +12,15 @@ from app.core.config import get_settings
 from app.db.base import Base
 
 logger = logging.getLogger(__name__)
+
+
+@event.listens_for(Engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record) -> None:
+    """Enforce SQLite foreign key constraints across all connections."""
+    if isinstance(dbapi_connection, sqlite3.Connection):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 
 
 def create_db_engine(
@@ -52,6 +62,8 @@ SessionLocal = sessionmaker(
 
 def init_db() -> None:
     """Initialize database schemas and tables."""
+    import app.models  # noqa: F401 - ensure models are registered on Base.metadata
+
     logger.info("Initializing database metadata and tables...")
     Base.metadata.create_all(bind=engine)
     logger.info("Database initialized successfully.")
