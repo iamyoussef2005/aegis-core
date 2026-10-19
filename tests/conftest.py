@@ -77,6 +77,32 @@ def test_app(test_settings: Settings, db_session: Session) -> FastAPI:
 
 
 @pytest.fixture
+def seeded_session(db_session: Session) -> Session:
+    """Fixture providing a database session pre-populated with deterministic demo data."""
+    from scripts.seed_mock_data import seed_mock_data
+
+    seed_mock_data(db_session)
+    return db_session
+
+
+@pytest.fixture
+def empty_user(db_session: Session):
+    """Fixture providing a user with an empty inbox (zero emails)."""
+    from datetime import UTC, datetime
+
+    from app.models.user import User
+
+    user = User(
+        display_name="Empty Inbox Student",
+        email="empty.inbox@student.university.edu.sa",
+        created_at=datetime.now(UTC),
+    )
+    db_session.add(user)
+    db_session.commit()
+    return user
+
+
+@pytest.fixture
 def sync_client(test_app: FastAPI) -> Generator[TestClient, None, None]:
     """Synchronous HTTP TestClient fixture."""
     with TestClient(test_app) as client:

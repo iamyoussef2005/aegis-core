@@ -164,8 +164,11 @@ Every response includes:
 
 ## 🧪 Testing and Quality Assurance
 
-### Run the Test Suite
+See the comprehensive [QA & Testing Guide](docs/testing.md) for full execution options, coverage reporting, and architecture isolation guarantees.
+
+### Run the Test Suite (with Coverage)
 ```bash
+# Runs all 61 tests and generates line/branch coverage (enforces >= 85% threshold)
 pytest -v
 ```
 
@@ -174,9 +177,13 @@ pytest -v
 # Check code style with Ruff
 ruff check .
 
-# Format code with Ruff
+# Check formatting with Ruff
 ruff format --check .
 ```
+
+### Detailed Documentation
+- [REST API Specification & Request Examples](docs/api.md)
+- [QA & Test Automation Guide](docs/testing.md)
 
 ---
 
