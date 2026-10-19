@@ -2,24 +2,60 @@
 
 **AEGIS-CORE** is a research-oriented security firewall for autonomous AI agents. It provides a mediation and control plane designed to intercept AI agent tool invocations, enforce user-approved task permissions, track data provenance, and prevent unauthorized actions.
 
-This repository reflects the completed **Week 1: Project Foundation** milestone of our 10-week roadmap.
+This repository reflects the completed **Week 1: Project Foundation** milestone of our 10-week development roadmap.
 
 ---
 
-## 🏛️ Week 1 Architecture & Modular Design
+## 🎯 Problem Statement
+
+As autonomous AI agents are granted access to execute system tools—such as inspecting private mailboxes, dispatching web requests, querying corporate databases, and modifying file systems—they face critical security vulnerabilities:
+1. **Indirect Prompt Injection:** Adversarial instructions embedded in untrusted external data (e.g., incoming emails or web pages) can hijack agent reasoning and force malicious tool calls.
+2. **Data Exfiltration:** Malicious payloads can trick an agent into transmitting sensitive user credentials or private records to untrusted endpoints.
+3. **Privilege Escalation:** Unchecked agent autonomous loops can exceed intended operational boundaries and perform destructive actions without human authorization.
+
+**AEGIS-CORE** addresses these threats by providing an intent-aware execution firewall that inspects tool calls, enforces deterministic policy rules, tracks request provenance, and mandates human-in-the-loop approval before sensitive actions execute.
+
+---
+
+## 📦 Week 1 Foundation Scope
+
+Week 1 establishes the architectural foundation and local simulation environment:
+- **Application Core:** Modular FastAPI backend with application factory, configuration parsing, and structured logging.
+- **Relational Persistence:** SQLite engine with SQLAlchemy 2.x ORM models, session lifecycle management, and strict foreign-key enforcement.
+- **Simulated Domain:** Realistic mock academic email environment featuring 3 synthetic users, 30 bilingual (English & Arabic) messages, and 6 labeled benign adversarial prompt injection benchmarks.
+- **REST API Interface:** Endpoints for simulated users and emails with deterministic pagination, read-status filtering, and cross-tenant ownership isolation.
+- **Quality Assurance:** 61 automated tests running against in-memory SQLite with 94.95% statement and branch coverage.
+
+---
+
+## 🛠️ Tech Stack & Technologies Used
+
+- **Language:** Python 3.12+ (tested on Python 3.14)
+- **API Framework:** FastAPI 0.115+
+- **ASGI Server:** Uvicorn
+- **ORM & Database:** SQLAlchemy 2.0+ with SQLite
+- **Validation & Settings:** Pydantic v2 & Pydantic-Settings
+- **Test Automation:** Pytest 8.2+, pytest-asyncio, pytest-cov, HTTPX
+- **Linter & Formatter:** Ruff 0.5+
+- **Version Control:** Git
+
+---
+
+## 🏛️ Modular Architecture
 
 ```
 aegis-core/
 ├── app/
 │   ├── __init__.py               # Package metadata and version definition
 │   ├── main.py                   # Application factory, lifespan, CORS, and provenance middleware
-│   ├── api/                      # Routing layer
+│   ├── api/                      # Presentation layer
 │   │   ├── __init__.py
 │   │   └── v1/
 │   │       ├── __init__.py       # v1 API router aggregation
 │   │       └── routes/
 │   │           ├── __init__.py
-│   │           └── health.py     # GET /api/v1/health diagnostic endpoint
+│   │           ├── health.py     # GET /api/v1/health diagnostic endpoint
+│   │           └── users.py      # Simulated users and mock email REST endpoints
 │   ├── core/                     # Infrastructure foundations
 │   │   ├── __init__.py
 │   │   ├── config.py             # Type-safe environment settings (Pydantic v2 Settings)
@@ -27,49 +63,56 @@ aegis-core/
 │   ├── db/                       # Persistence foundations
 │   │   ├── __init__.py
 │   │   ├── base.py               # SQLAlchemy 2.x DeclarativeBase and TimestampMixin
-│   │   └── session.py            # Engine lifecycle, sessionmaker, and get_db dependency
-│   ├── models/                   # SQLAlchemy ORM models (ready for Week 2+)
-│   │   └── __init__.py
-│   ├── schemas/                  # Pydantic v2 schemas
+│   │   └── session.py            # Engine lifecycle, SQLite FK connect listener, get_db generator
+│   ├── models/                   # SQLAlchemy ORM mapped entities
 │   │   ├── __init__.py
-│   │   └── health.py             # HealthResponse & DatabaseHealth schemas
+│   │   ├── user.py               # User mapped model (1-to-many relationship)
+│   │   └── email_message.py      # EmailMessage mapped model (owner_id FK, composite indexes)
+│   ├── schemas/                  # Pydantic v2 request/response schemas
+│   │   ├── __init__.py
+│   │   ├── health.py             # HealthResponse & DatabaseHealth schemas
+│   │   ├── user.py               # UserBase, UserCreate, UserResponse schemas
+│   │   └── email.py              # EmailMessageResponse, EmailListResponse, EmailCountResponse
 │   ├── repositories/             # Data access repository layer (Repository Pattern)
 │   │   ├── __init__.py
-│   │   └── base.py               # BaseRepository generic CRUD implementation
+│   │   ├── base.py               # Generic BaseRepository CRUD implementation
+│   │   ├── user.py               # UserRepository with bound parameter queries
+│   │   └── email.py              # EmailRepository with owner-scoped queries and ordering
 │   └── services/                 # Domain business logic layer
 │       ├── __init__.py
-│       └── health.py             # System uptime and health inspection service
-├── tests/                        # Automated test suite
+│       ├── health.py             # System uptime and health inspection service
+│       ├── user.py               # User domain service
+│       └── email.py              # Email domain service with tenant isolation
+├── docs/                         # Architecture, API, testing, and handoff documentation
+│   ├── architecture.md           # System architecture, module boundaries, diagrams
+│   ├── api.md                    # REST API reference, schemas, curl examples
+│   ├── testing.md                # QA testing guide, categories, isolation guarantees
+│   ├── week1-report.md           # Independent audit and acceptance report
+│   └── week2-handoff.md          # Week 2 engineering handoff guide
+├── tests/                        # Automated test suite (61 tests, in-memory SQLite)
 │   ├── __init__.py
 │   ├── conftest.py               # Pytest fixtures (in-memory SQLite, HTTP clients)
-│   ├── test_config.py            # Configuration validation tests
-│   ├── test_database.py          # Session lifecycle & repository CRUD tests
-│   ├── test_health.py            # GET /api/v1/health & security headers tests
-│   └── test_logging.py           # Structured logging & secret redaction tests
+│   ├── test_startup.py           # Application factory, routing, and OpenAPI tests
+│   ├── test_database.py          # Database connectivity, sessions, and CRUD tests
+│   ├── test_mock_email_env.py    # Foreign keys, cascades, and seed reproducibility tests
+│   ├── test_api_users_emails.py  # User & email API integration tests
+│   ├── test_security_boundaries.py # Tenant isolation, SQLi, and traceback masking tests
+│   ├── test_edge_cases.py        # Empty inbox, boundary limits, and malformed parameter tests
+│   ├── test_config.py            # Environment configuration validation tests
+│   └── test_logging.py           # Structured logging and secret redaction tests
 ├── scripts/
 │   ├── __init__.py
-│   └── run_dev.py                # Development server runner
+│   ├── run_dev.py                # Development server runner
+│   └── seed_mock_data.py         # Deterministic, idempotent mock email seeding script
 ├── .env.example                  # Environment configuration template
 ├── .gitignore                    # Git exclusions
-├── pyproject.toml                # Project packaging, dependency constraints, Ruff, & pytest config
+├── pyproject.toml                # Project packaging, dependencies, Ruff, & pytest config
 └── README.md                     # Project documentation
 ```
 
 ---
 
-## 🛠️ Tech Stack
-
-- **Language:** Python 3.12+ (tested on Python 3.14)
-- **Framework:** FastAPI
-- **Database Engine:** SQLite / SQLAlchemy 2.x
-- **Data Validation & Settings:** Pydantic v2 & Pydantic-Settings
-- **Testing:** Pytest, pytest-asyncio, HTTPX
-- **Code Quality:** Ruff (linting & formatting)
-- **Version Control:** Git
-
----
-
-## 🚀 Getting Started
+## 🚀 Installation & Environment Setup
 
 ### 1. Prerequisites
 Ensure Python 3.12 or newer is installed:
@@ -90,147 +133,110 @@ source .venv/bin/activate
 ```
 
 ### 3. Install Dependencies
-Install production and development dependencies:
+Install the package in editable mode with development dependencies:
 ```bash
 pip install -e ".[dev]"
 ```
-*(Or install directly via `pip install fastapi "uvicorn[standard]" pydantic pydantic-settings "sqlalchemy>=2.0" python-dotenv pytest pytest-asyncio httpx ruff`)*
 
 ### 4. Configure Environment Variables
 Copy `.env.example` to `.env`:
 ```bash
+# Windows (PowerShell)
+Copy-Item .env.example .env
+
+# Linux / macOS
 cp .env.example .env
 ```
-Default configuration values work immediately for local development using an SQLite database (`./aegis.db`).
+Default settings configure a local SQLite database (`./aegis.db`) bound strictly to `127.0.0.1`.
 
 ---
 
-## 💻 Running the Application
+## 🗄️ Database Initialization & Demo Data Seeding
 
-### Using Uvicorn Directly
+### 1. Database Initialization
+Tables are automatically created on application startup via the lifespan event handler (`init_db()`).
+
+### 2. Seed Deterministic Mock Data
+Populate the database with 3 demo academic users and 30 realistic academic emails:
+```bash
+python -m scripts.seed_mock_data
+```
+
+**Seeding Guarantees:**
+- **Exact Counts:** 3 demo users and 30 emails (10 per user).
+- **Idempotent:** Safe to run repeatedly without creating duplicate records or modifying existing entries.
+- **Multilingual Support:** Fully validates UTF-8 Arabic and English text.
+- **Adversarial Safety Probes:** Includes 6 labeled benign test prompts (`[SECURITY RESEARCH BENCHMARK - BENIGN TEST]`) for evaluating upcoming firewall interception and prompt-injection filters without external exfiltration.
+
+---
+
+## 💻 Starting the API
+
+### Direct Launch with Uvicorn
 ```bash
 uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-### Using the Development Script
+### Launch via Development Runner Script
 ```bash
 python -m scripts.run_dev
 ```
 
-### API Documentation
+### API Documentation Locations
+Once the application is running:
 - **Interactive Swagger UI:** [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 - **ReDoc Documentation:** [http://127.0.0.1:8000/redoc](http://127.0.0.1:8000/redoc)
-- **OpenAPI JSON Spec:** [http://127.0.0.1:8000/openapi.json](http://127.0.0.1:8000/openapi.json)
+- **OpenAPI 3.x JSON Specification:** [http://127.0.0.1:8000/openapi.json](http://127.0.0.1:8000/openapi.json)
 
 ---
 
-## 🩺 Health Check Endpoint
+## 🩺 REST API Endpoint Summary
 
-### Request
-```http
-GET /api/v1/health HTTP/1.1
-Host: 127.0.0.1:8000
-```
+| Method | Endpoint | Description | Status Codes |
+|---|---|---|---|
+| `GET` | `/api/v1/health` | Service diagnostics, database ping, uptime | `200`, `503` |
+| `GET` | `/api/v1/users` | List demo academic users | `200` |
+| `GET` | `/api/v1/users/{user_id}/emails` | List owner emails with limit, offset, and is_read filters | `200`, `404`, `422` |
+| `GET` | `/api/v1/users/{user_id}/emails/count` | Total email count with optional is_read filter | `200`, `404`, `422` |
+| `GET` | `/api/v1/users/{user_id}/emails/recent` | Latest emails ordered by received_at desc (1-10 messages) | `200`, `404`, `422` |
+| `GET` | `/api/v1/users/{user_id}/emails/{email_id}` | Fetch single email with strict ownership isolation | `200`, `404` |
 
-### Structured Response (200 OK)
-```json
-{
-  "status": "healthy",
-  "project": "AEGIS-CORE",
-  "version": "0.1.0",
-  "environment": "development",
-  "timestamp": "2026-10-19T22:30:00Z",
-  "uptime_seconds": 12.34,
-  "database": {
-    "status": "healthy",
-    "dialect": "sqlite"
-  },
-  "components": {
-    "firewall_engine": "standby",
-    "provenance_tracker": "standby",
-    "policy_enforcer": "standby"
-  }
-}
-```
-
-### Security & Provenance Response Headers
-Every response includes:
-- `X-Correlation-ID`: Unique tracking UUID for request provenance and distributed tracing.
-- `X-Response-Time-MS`: Request processing latency in milliseconds.
-- `X-Content-Type-Options: nosniff`
-- `X-Frame-Options: DENY`
+See [docs/api.md](docs/api.md) for full parameter specifications and curl request/response examples.
 
 ---
 
-## 🧪 Testing and Quality Assurance
+## 🧪 Running Tests & Quality Verification
 
-See the comprehensive [QA & Testing Guide](docs/testing.md) for full execution options, coverage reporting, and architecture isolation guarantees.
+All tests run against in-memory SQLite instances with zero side-effects on local developer databases.
 
-### Run the Test Suite (with Coverage)
 ```bash
-# Runs all 61 tests and generates line/branch coverage (enforces >= 85% threshold)
+# Execute the full 61-test QA suite with coverage measurement
 pytest -v
-```
 
-### Run Code Linting & Formatting
-```bash
-# Check code style with Ruff
+# Run code style and lint checks with Ruff
 ruff check .
 
-# Check formatting with Ruff
+# Check code formatting with Ruff
 ruff format --check .
 ```
 
-### Detailed Documentation
-- [REST API Specification & Request Examples](docs/api.md)
-- [QA & Test Automation Guide](docs/testing.md)
+See [docs/testing.md](docs/testing.md) for testing methodology and isolation guarantees.
 
 ---
 
-## 🗄️ Database Architecture & Mock Email Environment
+## ⚠️ Known Limitations (Week 1 Scope)
 
-AEGIS-CORE provides a realistic, deterministic, SQLite-backed mock academic email environment designed to evaluate AI agent security, tool-call permissions, and data exfiltration defenses.
-
-### Entity-Relationship Model
-- **`users`**:
-  - `id` (INTEGER, PK, Auto-increment)
-  - `display_name` (VARCHAR(150), NOT NULL)
-  - `email` (VARCHAR(255), UNIQUE, INDEXED, NOT NULL)
-  - `created_at` (DATETIME with UTC timezone, NOT NULL)
-  - *Relationship:* 1-to-many with `email_messages` (cascade on delete)
-- **`email_messages`**:
-  - `id` (INTEGER, PK, Auto-increment)
-  - `owner_id` (INTEGER, FK -> `users.id` ON DELETE CASCADE, INDEXED, NOT NULL)
-  - `sender` (VARCHAR(255), NOT NULL)
-  - `recipient` (VARCHAR(255), NOT NULL)
-  - `subject` (VARCHAR(500), NOT NULL)
-  - `body` (TEXT, NOT NULL)
-  - `is_read` (BOOLEAN, DEFAULT FALSE, NOT NULL)
-  - `received_at` (DATETIME with UTC timezone, INDEXED, NOT NULL)
-  - `created_at` (DATETIME with UTC timezone, NOT NULL)
-  - *Indexes:* `ix_email_messages_owner_received` (`owner_id`, `received_at`), `ix_email_messages_owner_is_read` (`owner_id`, `is_read`)
-
-### SQLite Foreign Key Enforcement
-Foreign-key enforcement is enabled across all connections via a SQLAlchemy `Engine` connect event listener executing:
-```sql
-PRAGMA foreign_keys = ON;
-```
-
-### Deterministic Seeding
-The database seeding script generates exactly 3 demo academic users and 30 realistic academic emails (10 per user), with bilingual English and Arabic UTF-8 text and labeled benign adversarial prompt injection benchmarks:
-```bash
-python -m scripts.seed_mock_data
-```
-- **Idempotent:** Safe to run multiple times without duplicating or corrupting data.
-- **Academic Scenarios:** Announcements, assignment deadlines, course registration, internships, exam schedules, student clubs, and research project discussions.
-- **Safety Benchmarks:** Contains labeled benign test probes (`[SECURITY RESEARCH BENCHMARK - BENIGN TEST]`) for evaluating upcoming firewall interception and prompt-injection filters without external exfiltration.
+1. **Simulation Identity Model:** The `user_id` route parameter serves as an experimental tenant/inbox selector in a local simulator, **not** an authenticated session. Multi-user authentication and cryptographic agent session tokens are scheduled for Week 2.
+2. **Read-Only Email Operations:** Week 1 implements retrieval and inspection endpoints. Modifying or sending emails is intentionally omitted until the tool-interception proxy is added in Week 3.
+3. **Local In-Process Database:** Built on SQLite for reproducible research and local benchmarking. Production distributed storage will be addressed in Week 8.
+4. **No External Network Dependencies:** No live SMTP, IMAP, or third-party email providers are queried. All data is synthetic.
 
 ---
 
-## 🗺️ 10-Week Development Roadmap
+## 🗺️ Next Development Stage (10-Week Roadmap)
 
-- **Week 1 (Current):** Initial project foundation, modular architecture, environment config, structured logging, database engine lifecycle, and health endpoints.
-- **Week 2:** Agent session models, authentication tokens, and permission manifests.
+- **Week 1 (Completed):** Project foundation, modular architecture, SQLite models, mock academic email environment, REST API, QA automation.
+- **Week 2 (Next):** Agent session models, authentication tokens, permission manifests, and agent tool definitions (`read_inbox`, `search_emails`, `get_email_details`).
 - **Week 3:** Tool-call interception proxy and schema validation layer.
 - **Week 4:** Deterministic policy evaluation engine (Allow / Deny / Prompt-User).
 - **Week 5:** Interactive human-in-the-loop approval mechanism.
@@ -238,4 +244,6 @@ python -m scripts.seed_mock_data
 - **Week 7:** Anomaly detection and behavioral rate-limiting.
 - **Week 8:** Agent sandbox execution integration (MCP, local runners).
 - **Week 9:** End-to-end red-teaming and prompt-injection resistance testing.
-- **Week 10:** Production hardening, documentation, and research release.
+- **Week 10:** Production hardening, research release, and documentation.
+
+See [docs/week2-handoff.md](docs/week2-handoff.md) for the detailed engineering handoff guide for Week 2.
