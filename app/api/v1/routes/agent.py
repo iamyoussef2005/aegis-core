@@ -53,6 +53,16 @@ class AgentRunRequest(BaseModel):
         default="fake",
         description="Configured provider mode: 'fake' for offline/testing or 'openai' for live model",
     )
+    policy_profile: Literal[
+        "read_only_all", "inbox_triage", "strict_search", "minimal_read", "none"
+    ] = Field(
+        default="read_only_all",
+        description=(
+            "Server-owned demonstration policy profile for research experiments. "
+            "NOTE: This local simulation API allows profile selection for testing; "
+            "it is NOT an authenticated production API or authorization boundary."
+        ),
+    )
 
     @field_validator("message")
     @classmethod
@@ -94,6 +104,7 @@ def run_agent_task(
             prompt=request.message,
             provider_name=request.provider,
             session=session,
+            policy_profile=request.policy_profile,
         )
     except UserNotFoundError as err:
         raise HTTPException(

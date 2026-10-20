@@ -113,6 +113,14 @@ class SanitizedToolExecution(BaseModel):
     error_message: str | None = Field(
         default=None, description="Sanitized error description if tool execution failed"
     )
+    policy_action: str | None = Field(
+        default=None,
+        description="Firewall policy decision action: 'ALLOW' or 'DENY'",
+    )
+    policy_reason_code: str | None = Field(
+        default=None,
+        description="Machine-readable policy evaluation reason code",
+    )
     result_summary: dict[str, Any] | None = Field(
         default=None,
         description="Privacy-preserving summary of results without full private bodies",
@@ -183,6 +191,8 @@ class ExecutionTracer:
         result_dict: dict[str, Any] | None = None,
         error_code: str | None = None,
         error_message: str | None = None,
+        policy_action: str | None = None,
+        policy_reason_code: str | None = None,
     ) -> SanitizedToolExecution:
         """Record and append a sanitized tool execution event."""
         if isinstance(arguments, str):
@@ -209,6 +219,8 @@ class ExecutionTracer:
             timestamp=datetime.now(UTC).isoformat(),
             error_code=error_code,
             error_message=error_message,
+            policy_action=policy_action,
+            policy_reason_code=policy_reason_code,
             result_summary=sanitized_summary,
         )
         self.steps.append(step)

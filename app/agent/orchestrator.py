@@ -1,10 +1,11 @@
 """Mini AI Agent Orchestrator for AEGIS-CORE.
 
 Coordinates user intent, identity validation, provider interaction,
-bounded tool execution, and structured tracing.
+task-scoped policy authorization, bounded tool execution, and structured tracing.
 """
 
 import uuid
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -26,9 +27,13 @@ from app.agent.providers import (
 from app.agent.tracing import AgentResponse, ExecutionTracer
 from app.core.config import get_settings
 from app.db.session import SessionLocal
+from app.security.context import TaskContext
+from app.security.profiles import create_task_policy
+from app.security.schemas import TaskPolicy
 from app.services.user import UserService
 
 ALLOWED_PROVIDER_MODES: frozenset[str] = frozenset({"fake", "openai"})
+_POLICY_UNSET = object()
 
 
 class AgentOrchestrator:
@@ -40,6 +45,7 @@ class AgentOrchestrator:
         executor: ToolExecutor | None = None,
         max_tool_calls: int | None = None,
         max_iterations: int | None = None,
+        default_policy_profile: str | None = "read_only_all",
     ) -> None:
         settings = get_settings()
         self._provider = provider
@@ -52,6 +58,7 @@ class AgentOrchestrator:
         self.max_iterations = (
             max_iterations if max_iterations is not None else self.max_tool_calls + 2
         )
+        self.default_policy_profile = default_policy_profile
 
     def _get_provider(self, provider_mode: str | None = None) -> BaseLLMProvider:
         """Resolve and validate the LLM provider instance."""
@@ -74,6 +81,8 @@ class AgentOrchestrator:
         prompt: str,
         provider_name: str | None = None,
         session: Session | None = None,
+        policy: Any = _POLICY_UNSET,
+        policy_profile: str | None = None,
     ) -> AgentResponse:
         """Execute a user query against the simulated academic environment.
 
@@ -82,6 +91,8 @@ class AgentOrchestrator:
             prompt: User task description or message.
             provider_name: Optional provider identifier ('fake', 'openai').
             session: Optional database session.
+            policy: Explicit TaskPolicy or None. If omitted, uses policy_profile or default.
+            policy_profile: Predefined profile name ('read_only_all', 'inbox_triage', etc.).
 
         Returns:
             AgentResponse containing final answer and audit trace.
@@ -119,8 +130,34 @@ class AgentOrchestrator:
             with SessionLocal() as db_session:
                 display_name = _check_user(db_session)
 
-        # 3. Initialize unique Task and Execution Tracer
+        # 3. Initialize unique Task, Context, and Execution Tracer
         task_id = f"task_{uuid.uuid4().hex[:12]}"
+
+        # Resolve effective security policy before any tool execution
+        effective_policy: TaskPolicy | None
+        if policy is not _POLICY_UNSET:
+            effective_policy = policy
+            if isinstance(effective_policy, TaskPolicy):
+                task_id = effective_policy.task_id
+        elif policy_profile is not None:
+            effective_policy = create_task_policy(
+                task_id=task_id, user_id=user_id, profile_name=policy_profile
+            )
+        elif self.default_policy_profile is not None:
+            effective_policy = create_task_policy(
+                task_id=task_id,
+                user_id=user_id,
+                profile_name=self.default_policy_profile,
+            )
+        else:
+            effective_policy = None
+
+        context = TaskContext(
+            task_id=task_id,
+            user_id=user_id,
+            policy=effective_policy,
+        )
+
         tracer = ExecutionTracer(
             task_id=task_id,
             user_id=user_id,
@@ -180,7 +217,7 @@ class AgentOrchestrator:
                 for tc in response.tool_calls:
                     if tool_calls_count >= self.max_tool_calls:
                         limit_reason = "max_tool_calls_exceeded"
-                        # Ceil reached within multi-tool call response
+                        # Ceiling reached within multi-tool call response
                         tracer.record_error(
                             f"Tool call limit ({self.max_tool_calls}) reached. Call '{tc.name}' skipped."
                         )
@@ -210,6 +247,9 @@ class AgentOrchestrator:
                         raw_arguments=tc.arguments,
                         user_id=user_id,
                         session=session,
+                        task_id=task_id,
+                        policy=effective_policy,
+                        context=context,
                     )
 
                     # Extract error info if tool failed
@@ -224,6 +264,17 @@ class AgentOrchestrator:
                         else None
                     )
 
+                    policy_act = (
+                        outcome.policy_decision.decision.value
+                        if outcome.policy_decision
+                        else None
+                    )
+                    policy_rc = (
+                        outcome.policy_decision.reason_code.value
+                        if outcome.policy_decision
+                        else None
+                    )
+
                     tracer.record_tool_step(
                         call_id=tc.id,
                         tool_name=tc.name,
@@ -233,6 +284,8 @@ class AgentOrchestrator:
                         result_dict=outcome.tool_result.to_dict(),
                         error_code=err_code,
                         error_message=err_msg,
+                        policy_action=policy_act,
+                        policy_reason_code=policy_rc,
                     )
 
                     # Append tool result formatted as untrusted data

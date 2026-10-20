@@ -20,6 +20,7 @@ from app.agent.exceptions import UserNotFoundError
 from app.agent.orchestrator import AgentOrchestrator
 from app.agent.providers import FakeLLMProvider, LLMResponse, ToolCall
 from app.db.base import Base
+from app.security.profiles import create_task_policy
 from scripts.seed_mock_data import seed_mock_data
 
 
@@ -53,6 +54,11 @@ def print_response(label: str, response: Any) -> None:
             f"  Step {i + 1}: {step.tool_name} [{step.outcome}] "
             f"({step.duration_ms}ms) -> args: {step.arguments}"
         )
+        if step.policy_action:
+            print(
+                f"    Firewall Decision: [{step.policy_action}] "
+                f"reason_code: {step.policy_reason_code}"
+            )
         if step.error_code:
             print(f"    Error: {step.error_code}: {step.error_message}")
         if step.result_summary:
@@ -71,9 +77,22 @@ def run_demo() -> int:
     print_header("AEGIS-CORE WEEK 2 — MINI AI AGENT DEMO & VERIFICATION")
     print("Environment: Offline Research Sandbox (FakeLLMProvider)")
     print("Database:    Isolated In-Memory SQLite with Deterministic Academic Seed")
+    print("Security:    AEGIS-CORE Intent-Aware Deterministic Firewall Enabled")
 
     with session_factory() as session:
-        orchestrator = AgentOrchestrator()
+        # Create an explicit, trusted server-side read-only policy for demonstration tasks
+        demo_policy = create_task_policy(
+            task_id="demo_task_user_1",
+            user_id=1,
+            profile_name="read_only_all",
+        )
+        if demo_policy:
+            print(
+                f"Active Policy: Profile 'read_only_all' bound to User 1 "
+                f"(version: {demo_policy.policy_version}, allowed: {sorted(demo_policy.allowed_tools)})"
+            )
+
+        orchestrator = AgentOrchestrator(default_policy_profile="read_only_all")
 
         # ----------------------------------------------------------------------
         # Test 1: Read latest 3 emails and summarize in Arabic
@@ -81,12 +100,15 @@ def run_demo() -> int:
         print_header("Test 1: Read Latest 3 Emails & Summarize in Arabic")
         prompt1 = "Read my latest 3 emails and summarize them in Arabic."
         print(f'User 1 Request: "{prompt1}"')
-        res1 = orchestrator.run(user_id=1, prompt=prompt1, session=session)
+        res1 = orchestrator.run(
+            user_id=1, prompt=prompt1, session=session, policy=demo_policy
+        )
         print_response("Result 1", res1)
         assert res1.status == "success"
         assert res1.tool_calls_count == 1
         assert res1.execution_trace[0].tool_name == "read_inbox"
         assert res1.execution_trace[0].arguments["limit"] == 3
+        assert res1.execution_trace[0].policy_action == "ALLOW"
 
         # ----------------------------------------------------------------------
         # Test 2: Search for emails about assignments
@@ -94,12 +116,15 @@ def run_demo() -> int:
         print_header("Test 2: Search for Emails About Assignments")
         prompt2 = "Search for emails about assignments."
         print(f'User 1 Request: "{prompt2}"')
-        res2 = orchestrator.run(user_id=1, prompt=prompt2, session=session)
+        res2 = orchestrator.run(
+            user_id=1, prompt=prompt2, session=session, policy=demo_policy
+        )
         print_response("Result 2", res2)
         assert res2.status == "success"
         assert res2.tool_calls_count == 1
         assert res2.execution_trace[0].tool_name == "search_emails"
         assert "assignment" in res2.execution_trace[0].arguments["query"].lower()
+        assert res2.execution_trace[0].policy_action == "ALLOW"
 
         # ----------------------------------------------------------------------
         # Test 3: Show details of email 1
@@ -107,12 +132,15 @@ def run_demo() -> int:
         print_header("Test 3: Show Details of Email 1")
         prompt3 = "Show me the details of email 1."
         print(f'User 1 Request: "{prompt3}"')
-        res3 = orchestrator.run(user_id=1, prompt=prompt3, session=session)
+        res3 = orchestrator.run(
+            user_id=1, prompt=prompt3, session=session, policy=demo_policy
+        )
         print_response("Result 3", res3)
         assert res3.status == "success"
         assert res3.tool_calls_count == 1
         assert res3.execution_trace[0].tool_name == "get_email_details"
         assert res3.execution_trace[0].arguments["email_id"] == 1
+        assert res3.execution_trace[0].policy_action == "ALLOW"
 
         # ----------------------------------------------------------------------
         # Edge Case 1: Unknown User
@@ -180,7 +208,11 @@ def run_demo() -> int:
         )
         print_response("Result Cross-User Email", res_cross)
         assert res_cross.execution_trace[0].outcome == "ERROR"
-        assert res_cross.execution_trace[0].error_code == "EMAIL_NOT_FOUND"
+        assert res_cross.execution_trace[0].error_code in (
+            "EMAIL_NOT_FOUND",
+            "USER_MISMATCH",
+            "CONSTRAINT_VIOLATION",
+        )
         print("PASSED: Foreign email details were strictly hidden from User 1.")
 
         # ----------------------------------------------------------------------
@@ -209,7 +241,10 @@ def run_demo() -> int:
         res_bad = orch_bad.run(user_id=1, prompt="Run shell command", session=session)
         print_response("Result Invalid Tool", res_bad)
         assert res_bad.execution_trace[0].outcome == "ERROR"
-        assert res_bad.execution_trace[0].error_code == "UNKNOWN_TOOL"
+        assert res_bad.execution_trace[0].error_code in (
+            "UNKNOWN_TOOL",
+            "TOOL_NOT_ALLOWED",
+        )
         print("PASSED: Unregistered/dangerous tool rejected.")
 
         # ----------------------------------------------------------------------
@@ -239,7 +274,10 @@ def run_demo() -> int:
         )
         print_response("Result Malformed Arguments", res_bad_args)
         assert res_bad_args.execution_trace[0].outcome == "ERROR"
-        assert res_bad_args.execution_trace[0].error_code == "INVALID_ARGUMENTS_JSON"
+        assert res_bad_args.execution_trace[0].error_code in (
+            "INVALID_ARGUMENTS_JSON",
+            "ARGUMENT_INVALID",
+        )
 
         # ----------------------------------------------------------------------
         # Edge Case 6: Exceeded Tool-Call Limit

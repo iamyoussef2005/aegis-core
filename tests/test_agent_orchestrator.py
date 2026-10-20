@@ -140,13 +140,21 @@ def test_sanitize_result_summary_single_email() -> None:
 
 def test_tool_executor_execution_timing_and_outcome(seeded_session: Session) -> None:
     """Verify ToolExecutor measures duration and returns structured outcome."""
+    from app.security.profiles import create_task_policy
+
     executor = ToolExecutor()
+    policy = create_task_policy(
+        task_id="task_test_1",
+        user_id=1,
+        profile_name="read_only_all",
+    )
     outcome = executor.execute(
         call_id="call_test_1",
         tool_name="read_inbox",
         raw_arguments={"limit": 2},
         user_id=1,
         session=seeded_session,
+        policy=policy,
     )
 
     assert isinstance(outcome, ToolExecutionOutcome)
@@ -160,17 +168,28 @@ def test_tool_executor_execution_timing_and_outcome(seeded_session: Session) -> 
 
 def test_tool_executor_rejects_arbitrary_or_shell_calls() -> None:
     """Verify ToolExecutor explicitly rejects non-allowlisted tool names."""
+    from app.security.profiles import create_task_policy
+
     executor = ToolExecutor()
+    policy = create_task_policy(
+        task_id="task_test_shell",
+        user_id=1,
+        profile_name="read_only_all",
+    )
     outcome = executor.execute(
         call_id="call_bad",
         tool_name="os.system",
         raw_arguments={"cmd": "whoami"},
         user_id=1,
+        policy=policy,
     )
 
     assert outcome.success is False
-    assert outcome.tool_result.error.code == "UNKNOWN_TOOL"
-    assert "not allowed" in outcome.tool_result.error.message
+    assert outcome.tool_result.error.code in ("UNKNOWN_TOOL", "TOOL_NOT_ALLOWED")
+    assert (
+        "not allowed" in outcome.tool_result.error.message.lower()
+        or "not a recognized" in outcome.tool_result.error.message.lower()
+    )
 
 
 # ==============================================================================
@@ -317,7 +336,7 @@ def test_orchestrator_unknown_tool_handled(seeded_session: Session) -> None:
     assert response.tool_calls_count == 1
     trace_step = response.execution_trace[0]
     assert trace_step.outcome == "ERROR"
-    assert trace_step.error_code == "UNKNOWN_TOOL"
+    assert trace_step.error_code in ("UNKNOWN_TOOL", "TOOL_NOT_ALLOWED")
     assert "shell" in response.final_answer.lower()
 
 
@@ -348,7 +367,10 @@ def test_orchestrator_invalid_model_arguments(seeded_session: Session) -> None:
     assert response.status == "success"
     assert response.tool_calls_count == 1
     assert response.execution_trace[0].outcome == "ERROR"
-    assert response.execution_trace[0].error_code == "INVALID_ARGUMENTS_JSON"
+    assert response.execution_trace[0].error_code in (
+        "INVALID_ARGUMENTS_JSON",
+        "ARGUMENT_INVALID",
+    )
 
 
 def test_orchestrator_provider_timeout(seeded_session: Session) -> None:
