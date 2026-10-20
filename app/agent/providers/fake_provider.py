@@ -46,6 +46,10 @@ class FakeLLMProvider(BaseLLMProvider):
         """Add a canned response to the queue."""
         self._canned_responses.append(response)
 
+    def set_canned_responses(self, responses: list[LLMResponse]) -> None:
+        """Replace the canned response queue with a new sequence."""
+        self._canned_responses = list(responses)
+
     def generate(
         self,
         messages: list[ChatMessage],
@@ -157,6 +161,63 @@ class FakeLLMProvider(BaseLLMProvider):
         # Case B: User request requiring tool invocation
         user_text = last_message.content or ""
         lower_user = user_text.lower()
+
+        # Attempt deterministic intent resolution for seamless Week 4 integration
+        try:
+            from app.intent.parser import parse_intent
+            from app.intent.schemas import IntentType
+
+            intent = parse_intent(user_text)
+            if intent.intent_type in (
+                IntentType.READ_LATEST_EMAILS,
+                IntentType.SUMMARIZE_RECENT_EMAILS,
+            ):
+                limit = intent.requested_count or 5
+                return LLMResponse(
+                    tool_calls=[
+                        ToolCall(
+                            id=f"call_inbox_{self._call_count}",
+                            name="read_inbox",
+                            arguments=json.dumps({"limit": limit}),
+                        )
+                    ],
+                    finish_reason="tool_calls",
+                    model=self._model_name,
+                )
+            elif intent.intent_type == IntentType.SEARCH_EMAILS and intent.search_query:
+                return LLMResponse(
+                    tool_calls=[
+                        ToolCall(
+                            id=f"call_search_{self._call_count}",
+                            name="search_emails",
+                            arguments=json.dumps(
+                                {"query": intent.search_query, "limit": 5}
+                            ),
+                        )
+                    ],
+                    finish_reason="tool_calls",
+                    model=self._model_name,
+                )
+            elif (
+                intent.intent_type == IntentType.READ_EMAIL_DETAILS
+                and intent.requested_email_id
+            ):
+                return LLMResponse(
+                    tool_calls=[
+                        ToolCall(
+                            id=f"call_detail_{self._call_count}",
+                            name="get_email_details",
+                            arguments=json.dumps(
+                                {"email_id": intent.requested_email_id}
+                            ),
+                        )
+                    ],
+                    finish_reason="tool_calls",
+                    model=self._model_name,
+                )
+        except Exception:
+            # Fallback to existing heuristic regexes
+            pass
 
         # Check for assignment search specifically
         if "assignment" in lower_user or "تكليف" in user_text:

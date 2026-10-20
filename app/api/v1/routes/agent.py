@@ -16,7 +16,7 @@ by the AEGIS-CORE execution firewall, token authentication, and approval gates.
 
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
@@ -78,12 +78,13 @@ class AgentRunRequest(BaseModel):
     "/run",
     response_model=AgentResponse,
     status_code=status.HTTP_200_OK,
-    summary="Execute Mini AI Agent Task",
+    summary="[BENCHMARK ONLY] Execute Mini AI Agent with Pre-approved Demo Profile",
     description=(
-        "Dispatches a user request to the autonomous Mini AI Agent. "
-        "The agent executes bounded read-only tool calls against the selected user's inbox, "
-        "enforces server-controlled tenant identity, and returns a structured response with sanitized audit traces. "
-        "NOTE: user_id is a local simulation selector, NOT an authenticated session."
+        "LEGACY BENCHMARK MODE ONLY: This endpoint executes tasks using static pre-approved Week 3 "
+        "demonstration profiles. It is retained exclusively for offline comparative benchmarking and tests. "
+        "It BYPASSES Week 4 dynamic intent parsing and proposal approval. "
+        "For standard secure execution, use: POST /api/v1/permissions/propose -> "
+        "POST /api/v1/permissions/{id}/approve -> POST /api/v1/tasks/{task_id}/execute."
     ),
     responses={
         404: {"description": "Simulated user not found"},
@@ -94,8 +95,15 @@ class AgentRunRequest(BaseModel):
 def run_agent_task(
     request: AgentRunRequest,
     session: Annotated[Session, Depends(get_db)],
+    http_response: Response,
 ) -> AgentResponse:
-    """Execute an agent task using the configured orchestrator."""
+    """Execute an agent task using a pre-approved legacy demonstration profile."""
+    # Label response with execution mode warning headers
+    http_response.headers["X-AEGIS-Execution-Mode"] = "unapproved-benchmark-profile"
+    http_response.headers["X-AEGIS-Warning"] = (
+        "Legacy unapproved benchmark profile execution. Use Week 4 /api/v1/tasks/{task_id}/execute for secured tasks."
+    )
+
     orchestrator = AgentOrchestrator()
 
     try:
