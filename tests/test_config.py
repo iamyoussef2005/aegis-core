@@ -35,3 +35,29 @@ def test_environment_helpers() -> None:
     test_settings = Settings(ENVIRONMENT="testing")
     assert test_settings.is_production is False
     assert test_settings.is_testing is True
+
+
+def test_llm_agent_settings() -> None:
+    """Verify LLM and agent configuration defaults and overrides."""
+    settings = Settings()
+    assert settings.LLM_PROVIDER == "fake"
+    assert settings.OPENAI_API_KEY is None
+    assert settings.OPENAI_MODEL == "gpt-4o-mini"
+    assert settings.AGENT_MAX_TOOL_CALLS == 5
+    assert settings.AGENT_MODEL_TIMEOUT_SECONDS == 30.0
+    assert settings.AGENT_MAX_OUTPUT_TOKENS == 1024
+
+    custom = Settings(
+        LLM_PROVIDER="openai",
+        OPENAI_API_KEY="sk-test-key",
+        OPENAI_MODEL="gpt-4o",
+        AGENT_MAX_TOOL_CALLS=10,
+        AGENT_MODEL_TIMEOUT_SECONDS=45.0,
+        AGENT_MAX_OUTPUT_TOKENS=2048,
+    )
+    assert custom.LLM_PROVIDER == "openai"
+    assert custom.OPENAI_API_KEY == "sk-test-key"
+    assert custom.OPENAI_MODEL == "gpt-4o"
+    assert custom.AGENT_MAX_TOOL_CALLS == 10
+    assert custom.AGENT_MODEL_TIMEOUT_SECONDS == 45.0
+    assert custom.AGENT_MAX_OUTPUT_TOKENS == 2048

@@ -92,6 +92,42 @@ class Settings(BaseSettings):
         description="Log output formatting: machine-readable JSON or human-readable console",
     )
 
+    # LLM Provider & Agent Configuration
+    LLM_PROVIDER: Literal["fake", "openai"] = Field(
+        default="fake",
+        description="Active LLM provider: 'fake' for offline/testing or 'openai' for live API",
+    )
+    OPENAI_API_KEY: str | None = Field(
+        default=None,
+        description="OpenAI API key (required when LLM_PROVIDER=openai)",
+    )
+    OPENAI_BASE_URL: str | None = Field(
+        default=None,
+        description="Optional custom base URL for OpenAI-compatible gateways",
+    )
+    OPENAI_MODEL: str = Field(
+        default="gpt-4o-mini",
+        description="Model identifier for OpenAI provider (e.g. gpt-4o-mini, gpt-4o)",
+    )
+    AGENT_MAX_TOOL_CALLS: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Maximum allowed tool calls per agent invocation",
+    )
+    AGENT_MODEL_TIMEOUT_SECONDS: float = Field(
+        default=30.0,
+        ge=1.0,
+        le=300.0,
+        description="Timeout for LLM API requests in seconds",
+    )
+    AGENT_MAX_OUTPUT_TOKENS: int = Field(
+        default=1024,
+        ge=64,
+        le=8192,
+        description="Upper bound for model response token generation",
+    )
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def assemble_cors_origins(cls, value: str | list[str]) -> list[str]:

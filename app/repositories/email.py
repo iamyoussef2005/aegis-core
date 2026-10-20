@@ -3,11 +3,24 @@
 from collections.abc import Sequence
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.email_message import EmailMessage
 from app.repositories.base import BaseRepository
+
+
+def escape_like_wildcards(term: str, escape_char: str = "/") -> str:
+    """Escape LIKE wildcard characters (%, _, and escape_char itself).
+
+    Ensures that user input containing SQL wildcard characters is matched
+    literally rather than acting as a pattern matching wildcard.
+    """
+    return (
+        term.replace(escape_char, escape_char + escape_char)
+        .replace("%", escape_char + "%")
+        .replace("_", escape_char + "_")
+    )
 
 
 class EmailRepository(BaseRepository[EmailMessage]):
@@ -69,6 +82,56 @@ class EmailRepository(BaseRepository[EmailMessage]):
         elif unread_only:
             query = query.where(EmailMessage.is_read.is_(False))
         result = self.session.scalar(query)
+        return int(result or 0)
+
+    def search_by_owner(
+        self,
+        owner_id: int,
+        query: str,
+        limit: int = 10,
+        skip: int = 0,
+    ) -> Sequence[EmailMessage]:
+        """Search emails belonging strictly to the specified owner matching query in subject or body.
+
+        Performs case-insensitive search using bound parameters and escaped wildcards.
+        Ordered by received_at desc, then id desc.
+        """
+        escaped_query = escape_like_wildcards(query.strip())
+        pattern = f"%{escaped_query}%"
+        stmt = (
+            select(EmailMessage)
+            .where(EmailMessage.owner_id == owner_id)
+            .where(
+                or_(
+                    EmailMessage.subject.ilike(pattern, escape="/"),
+                    EmailMessage.body.ilike(pattern, escape="/"),
+                )
+            )
+            .order_by(EmailMessage.received_at.desc(), EmailMessage.id.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        return self.session.scalars(stmt).all()
+
+    def count_search_by_owner(
+        self,
+        owner_id: int,
+        query: str,
+    ) -> int:
+        """Count emails matching search query strictly for the specified owner."""
+        escaped_query = escape_like_wildcards(query.strip())
+        pattern = f"%{escaped_query}%"
+        stmt = (
+            select(func.count(EmailMessage.id))
+            .where(EmailMessage.owner_id == owner_id)
+            .where(
+                or_(
+                    EmailMessage.subject.ilike(pattern, escape="/"),
+                    EmailMessage.body.ilike(pattern, escape="/"),
+                )
+            )
+        )
+        result = self.session.scalar(stmt)
         return int(result or 0)
 
     def create_email(
@@ -137,4 +200,20 @@ def count_emails_by_owner(
         owner_id=owner_id,
         is_read=is_read,
         unread_only=unread_only,
+    )
+
+
+def search_emails_by_owner(
+    session: Session,
+    owner_id: int,
+    query: str,
+    limit: int = 10,
+    skip: int = 0,
+) -> Sequence[EmailMessage]:
+    """Retrieve emails scoped to an owner matching search query in subject or body."""
+    return EmailRepository(session).search_by_owner(
+        owner_id=owner_id,
+        query=query,
+        limit=limit,
+        skip=skip,
     )

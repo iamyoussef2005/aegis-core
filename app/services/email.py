@@ -121,3 +121,42 @@ class EmailService:
             is_read=None,
         )
         return [EmailMessageResponse.model_validate(e) for e in recent]
+
+    def search_user_emails(
+        self,
+        user_id: int,
+        query: str,
+        limit: int = 10,
+        offset: int = 0,
+    ) -> list[EmailMessageResponse] | None:
+        """Search emails for a given user across subject and body.
+
+        Returns None if user does not exist.
+        """
+        if not self.user_exists(user_id):
+            return None
+
+        results = self.email_repo.search_by_owner(
+            owner_id=user_id,
+            query=query,
+            limit=limit,
+            skip=offset,
+        )
+        return [EmailMessageResponse.model_validate(e) for e in results]
+
+    def count_search_user_emails(
+        self,
+        user_id: int,
+        query: str,
+    ) -> int | None:
+        """Count emails matching search query for a given user across subject and body.
+
+        Returns None if user does not exist.
+        """
+        if not self.user_exists(user_id):
+            return None
+
+        return self.email_repo.count_search_by_owner(
+            owner_id=user_id,
+            query=query,
+        )

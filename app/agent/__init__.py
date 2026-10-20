@@ -1,0 +1,125 @@
+"""AEGIS-CORE AI Agent subsystem.
+
+Contains schemas, tool adapters, tool registry, executor, providers,
+orchestrator, and execution tracing for autonomous AI agents.
+"""
+
+from app.agent.exceptions import (
+    AgentRuntimeError,
+    InvalidPromptError,
+    InvalidProviderError,
+    InvalidToolArgumentsError,
+    MaxToolCallsExceededError,
+    ProviderExecutionError,
+    ToolExecutionError,
+    UnknownToolError,
+    UserNotFoundError,
+)
+from app.agent.executor import ToolExecutionOutcome, ToolExecutor, default_tool_executor
+from app.agent.orchestrator import AgentOrchestrator
+from app.agent.prompts import DEFAULT_SYSTEM_PROMPT, build_system_prompt
+from app.agent.providers import (
+    BaseLLMProvider,
+    ChatMessage,
+    FakeLLMProvider,
+    LLMResponse,
+    OpenAIProvider,
+    ProviderAPIError,
+    ProviderConfigError,
+    ProviderError,
+    ProviderTimeoutError,
+    ToolCall,
+    get_provider,
+)
+from app.agent.runner import AgentExecutionResult, AgentRunner
+from app.agent.schemas import (
+    GetEmailDetailsInput,
+    ReadInboxData,
+    ReadInboxInput,
+    SearchEmailsData,
+    SearchEmailsInput,
+    ToolError,
+    ToolResult,
+)
+from app.agent.tool_registry import (
+    ALLOWED_TOOL_NAMES,
+    LLMGetEmailDetailsArgs,
+    LLMReadInboxArgs,
+    LLMSearchEmailsArgs,
+    ToolRegistry,
+    default_tool_registry,
+)
+from app.agent.tools.email_tools import (
+    EMAIL_TOOLS,
+    GET_EMAIL_DETAILS_TOOL_SPEC,
+    READ_INBOX_TOOL_SPEC,
+    SEARCH_EMAILS_TOOL_SPEC,
+    get_email_details,
+    get_tool_specs,
+    read_inbox,
+    search_emails,
+)
+from app.agent.tracing import (
+    AgentResponse,
+    ExecutionTracer,
+    SanitizedToolExecution,
+    sanitize_arguments,
+    sanitize_result_summary,
+)
+
+__all__ = [
+    "ALLOWED_TOOL_NAMES",
+    "AgentExecutionResult",
+    "AgentOrchestrator",
+    "AgentResponse",
+    "AgentRunner",
+    "AgentRuntimeError",
+    "BaseLLMProvider",
+    "ChatMessage",
+    "DEFAULT_SYSTEM_PROMPT",
+    "EMAIL_TOOLS",
+    "ExecutionTracer",
+    "FakeLLMProvider",
+    "GET_EMAIL_DETAILS_TOOL_SPEC",
+    "GetEmailDetailsInput",
+    "InvalidPromptError",
+    "InvalidProviderError",
+    "InvalidToolArgumentsError",
+    "LLMGetEmailDetailsArgs",
+    "LLMReadInboxArgs",
+    "LLMResponse",
+    "LLMSearchEmailsArgs",
+    "MaxToolCallsExceededError",
+    "OpenAIProvider",
+    "ProviderAPIError",
+    "ProviderConfigError",
+    "ProviderError",
+    "ProviderExecutionError",
+    "ProviderTimeoutError",
+    "READ_INBOX_TOOL_SPEC",
+    "ReadInboxData",
+    "ReadInboxInput",
+    "SEARCH_EMAILS_TOOL_SPEC",
+    "SanitizedToolExecution",
+    "SearchEmailsData",
+    "SearchEmailsInput",
+    "ToolCall",
+    "ToolError",
+    "ToolExecutionError",
+    "ToolExecutionOutcome",
+    "ToolExecutor",
+    "ToolRegistry",
+    "ToolResult",
+    "UnknownToolError",
+    "UserNotFoundError",
+    "build_system_prompt",
+    "default_tool_executor",
+    "default_tool_registry",
+    "get_email_details",
+    "get_provider",
+    "get_tool_specs",
+    "read_inbox",
+    "sanitize_arguments",
+    "sanitize_result_summary",
+    "search_emails",
+]
