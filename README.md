@@ -1,4 +1,12 @@
-# AEGIS-CORE
+# 🛡️ AEGIS-CORE
+
+> **An Intent-Aware Execution Firewall & Least-Privilege Authorization Runtime for Autonomous AI Agents**
+
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%20%7C%203.14-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![License](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](pyproject.toml)
+[![Tests](https://img.shields.io/badge/tests-591%20passed-brightgreen.svg)](tests/)
+[![Coverage](https://img.shields.io/badge/coverage-93.79%25-success.svg)](tests/)
 
 **AEGIS-CORE** is a research-oriented security firewall for autonomous AI agents. It provides a mediation and control plane designed to intercept AI agent tool invocations, enforce user-approved task permissions, track data provenance, and prevent unauthorized actions.
 
