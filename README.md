@@ -1,326 +1,143 @@
-# 🛡️ AEGIS-CORE
+# AEGIS-CORE
 
-> **An Intent-Aware Execution Firewall & Least-Privilege Authorization Runtime for Autonomous AI Agents**
+**A local research prototype for controlling the tools an AI agent can use.**
 
-[![Python 3.12+](https://img.shields.io/badge/python-3.12%20%7C%203.14-blue.svg)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![License](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](pyproject.toml)
-[![Tests](https://img.shields.io/badge/tests-591%20passed-brightgreen.svg)](tests/)
-[![Coverage](https://img.shields.io/badge/coverage-93.79%25-success.svg)](tests/)
+An agent may encounter instructions hidden in data it retrieves, such as an email asking it to read more messages or use an unrelated tool. AEGIS-CORE explores a deterministic authorization layer that checks proposed tool calls against permissions derived from the user's task.
 
-**AEGIS-CORE** is a research-oriented security firewall for autonomous AI agents. It provides a mediation and control plane designed to intercept AI agent tool invocations, enforce user-approved task permissions, track data provenance, and prevent unauthorized actions.
+The current prototype uses a **simulated email inbox** with fictional users and messages. It supports reading recent messages, searching for a keyword, and viewing a specific message. It does not connect to a real mailbox or provide production-ready authentication.
 
-This repository reflects the completed **Week 4: Intent Extraction, Least-Privilege Permission Proposals, and Trusted Approval Gate** milestone of our 10-week development roadmap.
+> **Research boundary:** Approval is simulated with a caller-supplied controller identifier. That identifier is not authenticated and can be impersonated. Keep this application local and use synthetic data.
 
----
+## How it works
 
-## 🎯 Problem Statement
-
-As autonomous AI agents are granted access to execute system tools—such as inspecting private mailboxes, dispatching web requests, querying corporate databases, and modifying file systems—they face critical security vulnerabilities:
-1. **Indirect Prompt Injection:** Adversarial instructions embedded in untrusted external data (e.g., incoming emails or web pages) can hijack agent reasoning and force malicious tool calls.
-2. **Data Exfiltration:** Malicious payloads can trick an agent into transmitting sensitive user credentials or private records to untrusted endpoints.
-3. **Privilege Escalation:** Unchecked agent autonomous loops can exceed intended operational boundaries and perform destructive actions without human authorization.
-4. **Autonomous Self-Approval:** Stochastic LLM agents cannot be trusted to approve or broaden their own security permissions midway through execution.
-
-**AEGIS-CORE** addresses these threats by providing an intent-aware execution firewall that extracts structured task intent, derives minimal permission proposals, mandates trusted supervisor approval before execution, and enforces deterministic policy rules at the runtime gate.
-
----
-
-## 📦 Milestone Progress & Scope
-
-### Week 1 Foundation (Completed)
-- **FastAPI Core:** Application factory, configuration parsing, structured JSON logging with sensitive data redaction.
-- **Relational Persistence:** SQLite engine with SQLAlchemy 2.x ORM models (`User`, `EmailMessage`), foreign-key enforcement, and cascade deletion.
-- **Simulated Domain:** Realistic mock academic email environment featuring 3 synthetic users, 30 bilingual (English & Arabic) messages, and 6 labeled benign adversarial prompt injection benchmarks.
-- **REST API:** Endpoints for simulated users and emails with deterministic pagination, read-status filtering, and cross-tenant ownership isolation.
-
-### Week 2 Mini AI Agent (Completed & Verified)
-- **Controlled Tool Execution Pipeline:** Single execution entry point via `ToolExecutor` and `ToolRegistry` with strict allowlist enforcement, schema conversion, and immutable server-controlled identity injection.
-- **Read-Only Python Tool Adapters:** Three strictly read-only tools (`read_inbox`, `get_email_details`, `search_emails`) with parameter validation, pagination bounds, SQL wildcard escaping, and tenant ownership scoping.
-- **Vendor-Agnostic LLM Provider Layer:** Abstract `BaseLLMProvider` interface with a 100% offline, deterministic research provider (`FakeLLMProvider`) and an official SDK v1-compatible provider (`OpenAIProvider`).
-- **Bounded ReAct Orchestrator:** Multi-turn loop with strict execution bounds (`max_tool_calls`, `max_iterations`, timeouts), untrusted data boundary demarcation, and privacy-preserving sanitized execution tracing.
-- **REST API:** `POST /api/v1/agent/run` with structured request and response models (`AgentRunRequest`, `AgentResponse`).
-
-### Week 3 Security Policy Engine & Execution Firewall (Completed & Verified)
-- **Centralized Security Enforcement Gate:** `ToolExecutor` acts as a mandatory authorization choke point. Every tool call must pass through `PolicyEngine.evaluate()` before dispatch.
-- **Deterministic Default-Deny Policy Engine:** Implements fail-closed evaluation (`ALLOW` or `DENY`) against server-owned, immutable `TaskPolicy` instances.
-- **Task-Scoped Parameter Constraints:** Deterministic argument boundaries (`ReadInboxConstraint`, `GetEmailDetailsConstraint`, `SearchEmailsConstraint`) enforcing limits, offsets, allowed email IDs, and query lengths.
-- **Anti-Escalation & Identity Scrubbing:** Model-generated arguments attempting to inject `policy`, `user_id`, or `task_id` are scrubbed before validation. The agent cannot alter its own permissions.
-- **Zero-Invocation Guarantee on Denials:** Denied tool calls invoke underlying adapters or database operations **zero times**.
-- **Comparative Security Benchmark:** Reproducible 50-operation benchmark (`scripts/run_security_benchmark.py`) proving a **0.00% Unauthorized Execution Rate (UER)** and sub-millisecond decision latency.
-
-### Week 4 Intent-to-Policy & Trusted Permission Approval (Completed & Verified)
-- **Multilingual Deterministic Intent Parser:** Natural-language intent extraction supporting English and Arabic (`app/intent/parser.py`), handling Eastern Arabic numerals, number words, Alef normalizations, and proclitic stripping.
-- **Least-Privilege Permission Proposals:** Automated, deterministic mapping (`app/intent/mappings.py`) from validated `TaskIntent` models to minimal `PermissionProposal` specifications with zero wildcards.
-- **Controlled Approval State Machine:** 5-state lifecycle (`PENDING` $\rightarrow$ `APPROVED` | `REJECTED` | `EXPIRED` $\rightarrow$ `CONSUMED`) guarded by `threading.RLock` and unforgeable proposal tokens (`app/intent/approval.py`).
-- **Trusted Supervisor Boundary:** Strict enforcement requiring explicit authorization headers (`X-AEGIS-Controller: local-supervisor`); untrusted model self-approvals (`llm_agent`) and missing credentials fail closed (HTTP 403 Forbidden).
-- **Secured Execution Runtime:** `POST /api/v1/tasks/{task_id}/execute` resolving server-owned state with at-most-once execution guarantees to prevent token replay attacks.
-- **Legacy Mode Containment:** `POST /api/v1/agent/run` permanently tagged with warning audit headers as an unapproved benchmark-only mode.
-- **Comprehensive Verification:** 591 automated tests passing (100%) with 94.70% code coverage, 0 regressions, and 100% accuracy on the 48-sample hold-out intent benchmark.
-
----
-
-## 🛠️ Tech Stack & Technologies Used
-
-- **Language:** Python 3.12+ (tested on Python 3.14)
-- **API Framework:** FastAPI 0.115+
-- **ASGI Server:** Uvicorn
-- **ORM & Database:** SQLAlchemy 2.0+ with SQLite
-- **Validation & Settings:** Pydantic v2 & Pydantic-Settings
-- **LLM Integration:** OpenAI Python SDK v1+ (`openai>=1.30.0`)
-- **Test Automation:** Pytest 8.2+, pytest-asyncio, pytest-cov, HTTPX
-- **Linter & Formatter:** Ruff 0.5+
-- **Version Control:** Git
-
----
-
-## 🏛️ Modular Architecture
-
-```
-aegis-core/
-├── app/
-│   ├── __init__.py               # Package metadata and version definition
-│   ├── main.py                   # Application factory, lifespan, CORS, and provenance middleware
-│   ├── agent/                    # Mini AI Agent runtime & LLM tool integration
-│   │   ├── __init__.py           # Agent package exports
-│   │   ├── exceptions.py         # Agent domain exceptions hierarchy
-│   │   ├── executor.py           # ToolExecutor: controlled tool execution gate & Week 3 firewall hook
-│   │   ├── orchestrator.py       # AgentOrchestrator: bounded multi-turn ReAct loop
-│   │   ├── prompts.py            # Contextualized system prompts with indirect prompt-injection defenses
-│   │   ├── runner.py             # Backward-compatible agent runner
-│   │   ├── schemas.py            # Pydantic v2 tool input/output envelopes
-│   │   ├── tool_registry.py      # ToolRegistry: static allowlist, schema conversion, user_id binding
-│   │   ├── tracing.py            # ExecutionTracer: privacy-preserving sanitized traces & AgentResponse
-│   │   ├── providers/            # LLM provider implementations
-│   │   │   ├── __init__.py       # Provider factory (get_provider)
-│   │   │   ├── base.py           # BaseLLMProvider ABC and normalized message models
-│   │   │   ├── fake_provider.py  # FakeLLMProvider: deterministic offline research provider (EN/AR)
-│   │   │   └── openai_provider.py# OpenAIProvider: official OpenAI SDK v1+ client
-│   │   └── tools/                # Python-callable tool adapters
-│   │       ├── __init__.py       # Tools package exports
-│   │       └── email_tools.py    # read_inbox, get_email_details, search_emails adapters
-│   ├── api/                      # Presentation layer
-│   │   ├── __init__.py
-│   │   └── v1/
-│   │       ├── __init__.py       # v1 API router aggregation
-│   │       └── routes/
-│   │           ├── __init__.py
-│   │           ├── agent.py      # POST /api/v1/agent/run (isolated legacy benchmark endpoint)
-│   │           ├── health.py     # GET /api/v1/health diagnostic endpoint
-│   │           ├── permissions.py# POST /permissions/propose, /{id}/approve, /{id}/reject
-│   │           ├── tasks.py      # POST /api/v1/tasks/{task_id}/execute secured execution endpoint
-│   │           └── users.py      # Simulated users and mock email REST endpoints
-│   ├── intent/                   # NEW: Week 4 Intent extraction & approval lifecycle subsystem
-│   │   ├── __init__.py           # Public exports
-│   │   ├── approval.py           # PermissionApprovalService & thread-safe ProposalStore
-│   │   ├── evaluation.py         # 48-sample hold-out intent benchmark dataset & runner
-│   │   ├── exceptions.py         # IntentError and ProposalSecurityError hierarchy
-│   │   ├── mappings.py           # Least-privilege intent-to-constraint mapping
-│   │   ├── parser.py             # Multilingual regex/NLP deterministic IntentParser (EN/AR)
-│   │   ├── proposals.py          # ProposalGenerator, SHA-256 revision hashing, validation
-│   │   └── schemas.py            # Pydantic v2 TaskIntent, PermissionProposal, ApprovalReceipt
-│   ├── security/                 # Task-scoped deterministic security policy engine
-│   │   ├── __init__.py           # Security exports (PolicyEngine, TaskPolicy, constraints)
-│   │   ├── context.py            # Trusted TaskContext (task_id, user_id, policy)
-│   │   ├── exceptions.py         # SecurityPolicyError hierarchy
-│   │   ├── policy_engine.py      # Deterministic, fail-closed policy evaluator
-│   │   ├── profiles.py           # Predefined demonstration profiles & factory methods
-│   │   └── schemas.py            # TaskPolicy, PolicyDecision, ToolExecutionRequest, constraints
-│   ├── core/                     # Infrastructure foundations
-│   │   ├── __init__.py
-│   │   ├── config.py             # Type-safe environment settings (Pydantic v2 Settings)
-│   │   └── logging.py            # Structured JSON/Console logging with sensitive data redaction
-│   ├── db/                       # Persistence foundations
-│   │   ├── __init__.py
-│   │   ├── base.py               # SQLAlchemy 2.x DeclarativeBase and TimestampMixin
-│   │   └── session.py            # Engine lifecycle, SQLite FK connect listener, get_db generator
-│   ├── models/                   # SQLAlchemy ORM mapped entities
-│   │   ├── __init__.py
-│   │   ├── user.py               # User mapped model (1-to-many relationship)
-│   │   └── email_message.py      # EmailMessage mapped model (owner_id FK, composite indexes)
-│   ├── repositories/             # Data access repository layer (Repository Pattern)
-│   │   ├── __init__.py
-│   │   ├── base.py               # Generic BaseRepository CRUD implementation
-│   │   ├── user.py               # UserRepository with bound parameter queries
-│   │   └── email.py              # EmailRepository with owner-scoped queries and wildcards
-│   └── services/                 # Domain business logic layer
-│       ├── __init__.py
-│       ├── email.py              # Email domain service with tenant isolation
-│       ├── health.py             # System uptime and health inspection service
-│       └── user.py               # User domain service
-├── docs/                         # Milestone specifications, architecture, and verification reports
-│   ├── week1-report.md           # Week 1 audit and acceptance report
-│   ├── week2-report.md           # Week 2 independent audit and acceptance report
-│   ├── week3-report.md           # Week 3 milestone acceptance and independent audit report
-│   ├── week4-intent-design.md    # Week 4 intent extraction architecture & Arabic normalizer
-│   ├── week4-proposals.md        # Week 4 least-privilege permission proposal specifications
-│   ├── week4-approval.md         # Week 4 approval controller state machine and trust model
-│   ├── week4-testing.md          # Week 4 comprehensive security verification & QA report
-│   ├── week4-report.md           # Week 4 milestone acceptance and independent audit report
-│   └── week5-handoff.md          # Week 5 engineering handoff guide (Provenance & Trust Tiers)
-├── tests/                        # Automated test suite (591 tests, in-memory SQLite)
-├── scripts/
-│   ├── benchmark_engine.py       # 50-operation comparative benchmark harness
-│   ├── run_security_benchmark.py # CLI runner for comparative security benchmark
-│   ├── seed_mock_data.py         # Deterministic, idempotent mock email seeding script
-│   └── week4_demo.py             # Week 4 end-to-end interactive / offline approval demo
-└── pyproject.toml                # Project packaging, dependencies, Ruff, & pytest config
+```text
+User request
+    -> Deterministic intent parser (English / Arabic)
+    -> Bounded permission proposal (PENDING)
+    -> Simulated supervisor approval
+    -> Task policy bound to the request and simulated user
+    -> Agent proposes a tool call
+    -> Policy engine allows or denies the call
+    -> Tool result and execution trace
 ```
 
----
+For example, **“Read my latest 3 emails”** produces a proposal for `read_inbox` with a maximum limit of 3 and an offset of 0. After simulated approval, the agent can request that tool; a request for 10 messages or for a different tool is denied by the policy engine.
 
-## 🚀 Installation & Environment Setup
+Each proposal authorizes one tool and expires after five minutes by default. The approved task is consumed when execution starts, so it cannot be executed again in the same server process. Ambiguous or unsupported requests do not produce an approved policy.
 
-### 1. Prerequisites
-Ensure Python 3.12 or newer is installed:
+### Main components
+
+- **Intent and proposals:** `app/intent/` parses supported requests and creates single-tool permission proposals.
+- **Approval and policy:** `app/intent/approval.py` manages proposal state; `app/security/` defines task policies and evaluates tool calls.
+- **Agent runtime:** `app/agent/orchestrator.py` runs the bounded agent loop, and `app/agent/executor.py` checks calls through the policy engine before dispatch.
+- **Simulation:** `app/models/`, `app/repositories/`, and `app/services/` provide a SQLite-backed inbox with three synthetic users and 30 messages.
+- **API:** `app/api/v1/routes/` exposes proposal, approval, execution, and simulated inbox endpoints.
+
+The stack is Python 3.12+, FastAPI, Pydantic, SQLAlchemy, and SQLite. The default provider is an offline, deterministic fake that returns demonstration responses rather than generating real summaries. An OpenAI provider is also available.
+
+## Quick start
+
+Clone the repository and create a virtual environment:
+
 ```bash
-python --version
-```
-
-### 2. Environment Setup
-Create and activate a virtual environment:
-```bash
-# Windows (PowerShell)
+git clone https://github.com/iamyoussef2005/aegis-core.git
+cd aegis-core
 python -m venv .venv
+```
+
+Activate it:
+
+```powershell
+# Windows PowerShell
 .\.venv\Scripts\Activate.ps1
+```
 
-# Linux / macOS
-python -m venv .venv
+```bash
+# macOS / Linux
 source .venv/bin/activate
 ```
 
-### 3. Install Dependencies
-Install the package in editable mode with development dependencies:
+Install the project and development dependencies, seed the local demo database, and run the offline walkthrough:
+
 ```bash
-pip install -e ".[dev]"
-```
-
-### 4. Configure Environment Variables
-Copy `.env.example` to `.env`:
-```bash
-# Windows (PowerShell)
-Copy-Item .env.example .env
-
-# Linux / macOS
-cp .env.example .env
-```
-
----
-
-## 🗄️ Database Initialization & Demo Data Seeding
-
-### 1. Database Initialization
-Tables are automatically created on application startup via the lifespan event handler (`init_db()`).
-
-### 2. Seed Deterministic Mock Data
-Populate the database with 3 demo academic users and 30 realistic academic emails:
-```bash
+python -m pip install -e ".[dev]"
 python -m scripts.seed_mock_data
-```
-
----
-
-## 🤖 Running the Week 4 Approval & Execution Demo
-
-AEGIS-CORE includes a standalone, 100% offline reproducible demo script that demonstrates the entire intent-to-execution workflow with the approval gate enabled:
-
-```bash
 python scripts/week4_demo.py
 ```
 
-This script verifies:
-1. **Scenario 1 (English Read):** *"Read my latest 3 emails."* $\rightarrow$ Proposes `read_inbox` (limit 3) $\rightarrow$ Supervisor approves $\rightarrow$ Executed through `PolicyEngine` firewall.
-2. **Scenario 2 (Arabic Summarize):** *"لخص آخر 2 إيميلات بالعربي."* $\rightarrow$ Proposes `read_inbox` (limit 2) $\rightarrow$ Approved $\rightarrow$ Returns Arabic deterministic summary.
-3. **Scenario 3 (Search Scoping):** *"Search emails for assignment."* $\rightarrow$ Proposes `search_emails` (exact term: `assignment`) $\rightarrow$ Firewall verifies exact match.
-4. **Scenario 4 (Security Gates):** Demonstrates real-time blocking of unapproved execution (409), replay attacks (409), and untrusted model self-approval (403).
+The seed command creates the configured database tables and adds fictional data without overwriting existing records. With the default configuration, it uses `./aegis.db`. The demo uses the configured database and the fake provider; it does not require an API key.
 
----
+## Try the API
 
-## 📊 Running the Intent Parsing Evaluation Benchmark
-
-Evaluate the deterministic intent parser and proposal generator against the 48-sample hold-out benchmark:
+After seeding, start the server on the local loopback interface:
 
 ```bash
-python app/intent/evaluation.py
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-### Benchmark Metrics
-- **Overall Classification Accuracy:** **100.00%** (48/48)
-- **Proposal Generation Accuracy:** **100.00%**
-- **False Denial Count:** **0**
-- **False Acceptance Count:** **0**
-- **Mean Latency:** **~55 µs** (sub-millisecond parsing)
+Open [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs) for the interactive API. The following examples use `curl` in a POSIX shell; the interactive docs can also be used on Windows.
 
----
-
-## 🛡️ Running the Comparative Security Benchmark
-
-Week 3 features a reproducible comparative benchmark contrasting an unprotected baseline agent with the AEGIS-CORE protected firewall across 50 operations (25 legitimate, 25 unauthorized):
+**1. Propose a permission.** Copy the returned `proposal_id` and `task_id` for the next steps.
 
 ```bash
+curl -sS -X POST "http://127.0.0.1:8000/api/v1/permissions/propose" \
+  -H "Content-Type: application/json" \
+  -d '{"user_id":1,"message":"Read my latest 3 emails."}'
+```
+
+The response includes `status: "PENDING"`, `requested_tool: "read_inbox"`, and the proposed limit and offset. No tool runs at this stage.
+
+**2. Approve the proposal.** Replace `<proposal_id>` with the returned value.
+
+```bash
+curl -sS -X POST "http://127.0.0.1:8000/api/v1/permissions/<proposal_id>/approve" \
+  -H "X-AEGIS-Controller: local-supervisor"
+```
+
+This header is a demonstration identity, not authentication. Approval creates the policy used by the task.
+
+**3. Execute the task.** Replace `<task_id>` with the value from step 1, using the same server process and acting before the proposal expires.
+
+```bash
+curl -sS -X POST "http://127.0.0.1:8000/api/v1/tasks/<task_id>/execute" \
+  -H "Content-Type: application/json" \
+  -d '{"provider":"fake"}'
+```
+
+The response contains the demonstration answer, tool steps, and policy decisions. Repeating the execution request for the same task returns a conflict because the proposal has already been consumed.
+
+## Tests and experiments
+
+After installing the development dependencies, seed the **configured** application database before running the tests:
+
+```bash
+python -m scripts.seed_mock_data
+python -m pytest
+```
+
+Most tests use isolated SQLite fixtures, but a few also access the configured application database and expect seeded data. A local run with an isolated, seeded application database passed **591 tests**. The test count and results may change as the project evolves.
+
+Two offline evaluation scripts are included:
+
+```bash
+# Classify a fixed set of 48 English and Arabic requests
+python -m app.intent.evaluation
+
+# Compare policy decisions on 50 synthetic operations
 python scripts/run_security_benchmark.py
 ```
 
-### Benchmark Results
-- **Unauthorized Execution Rate (UER):** **0.00%** under AEGIS-CORE (vs. 72.00% unprotected baseline).
-- **Legitimate Operation Allow Rate (LOAR):** **100.00%** (zero usability penalty).
-- **False Denial Rate (FDR):** **0.00%**.
-- **Underlying Adapter Calls on Denials:** **0 calls** (Zero-invocation guarantee).
+In a local run, the intent evaluation classified all 48 curated examples as expected. In the 50-operation comparison, the protected policy denied all 25 cases labeled unauthorized and allowed all 25 labeled legitimate. The comparison **infers adapter-invocation counts from decisions**; it does not execute adapters to measure those counts. Separate integration tests check dispatch behavior for selected cases. These small, fixed experiments do not establish real-world security or general language accuracy.
 
----
+## Current limitations
 
-## 🩺 REST API Endpoint Summary
+- **No authenticated approval or user sessions.** The approval endpoint accepts an asserted controller name, and `user_id` is a simulated inbox selector. This does not establish a human approval or a real user's identity.
+- **Other access paths exist.** The legacy `POST /api/v1/agent/run` endpoint uses demonstration policy profiles and bypasses the proposal approval workflow. The simulated inbox API also exposes data without that workflow, and the older `AgentRunner` dispatches directly through the registry.
+- **Local, temporary approval state.** Proposals, receipts, and policies are stored in memory and lost when the process restarts. The lock protects threads in one process, not multiple server workers.
+- **Limited intent coverage.** The parser uses rules for specific English and Arabic patterns. It supports Eastern Arabic digits, but does not generally parse written number words or arbitrary multi-step requests.
+- **Untrusted content remains a risk.** Tool results are labeled as untrusted, but full provenance tracking and trust-tier isolation are planned for a later milestone. Prompt-injection tests use simulated model behavior.
+- **Fake provider by default.** Its responses are predetermined demonstration text. To use the optional OpenAI provider, set `OPENAI_API_KEY` in the environment or a `.env` file and explicitly select `"provider": "openai"` in the API request. That mode sends the task and retrieved simulated content to the configured provider. See [`.env.example`](.env.example) for available settings.
 
-| Method | Endpoint | Description | Status Codes |
-|---|---|---|---|
-| `POST` | `/api/v1/permissions/propose` | Parse natural language intent into bounded PermissionProposal (`PENDING`) | `200`, `404`, `422` |
-| `POST` | `/api/v1/permissions/{proposal_id}/approve` | Trusted controller approves proposal and seals immutable `TaskPolicy` | `200`, `403`, `404`, `409`, `410` |
-| `POST` | `/api/v1/permissions/{proposal_id}/reject` | Explicitly reject a pending proposal | `200`, `404`, `409` |
-| `POST` | `/api/v1/tasks/{task_id}/execute` | Execute task under approved policy with at-most-once consumption | `200`, `403`, `404`, `409`, `410`, `503` |
-| `POST` | `/api/v1/agent/run` | Legacy unapproved benchmark execution mode (isolated with audit headers) | `200`, `404`, `422`, `503` |
-| `GET` | `/api/v1/health` | Service diagnostics, database ping, uptime | `200`, `503` |
-| `GET` | `/api/v1/users` | List demo academic users | `200` |
-| `GET` | `/api/v1/users/{user_id}/emails` | List owner emails with limit, offset, and is_read filters | `200`, `404`, `422` |
+## Project status
 
----
-
-## 🧪 Running Tests & Quality Verification
-
-All 591 tests run against in-memory SQLite instances with zero side-effects on local developer databases:
-
-```bash
-# Execute the full 591-test suite with statement and branch coverage
-pytest --cov=app --cov-branch --cov-report=term-missing
-
-# Run code style and lint checks with Ruff
-ruff check .
-
-# Check code formatting with Ruff
-ruff format --check .
-```
-
----
-
-## ⚠️ Known Limitations & Research Boundaries
-
-1. **Simulation Demonstration Trust Boundary:** The approval mechanism (`X-AEGIS-Controller: local-supervisor`) is designed for local research and automated benchmark verification. In production environments, this endpoint must be anchored to cryptographically signed tokens, mutual TLS (mTLS), hardware security keys (FIDO2), or an interactive administrative console.
-2. **Deterministic Fake LLM vs Live Stochastic Models:** The default test provider (`FakeLLMProvider`) generates deterministic rule-based outputs. In live deployments with LLMs (e.g., GPT-4o), model outputs are stochastic, but the deterministic execution firewall (`PolicyEngine`) inspects and validates the raw tool arguments before execution.
-3. **Read-Only Scope:** The agent cannot send, update, forward, or delete emails. The tool registry and proposal mappings strictly enforce read-only operations.
-4. **Task-Scoped Ephemeral Storage:** The current `ProposalStore` operates in-memory with thread-safe locking. Distributed deployments will require persistent transaction-locked datastores.
-
----
-
-## 🗺️ 10-Week Research Roadmap
-
-- **Week 1 (Completed):** Project foundation, modular architecture, SQLite models, mock academic email environment, REST API, QA automation.
-- **Week 2 (Completed):** Mini AI Agent runtime, read-only tool adapters, LLM provider abstraction, ReAct orchestrator, sanitized tracing, and `POST /api/v1/agent/run` API.
-- **Week 3 (Completed):** Task-Scoped Deterministic Security Policy Engine & Centralized Execution Gate (`ToolExecutor`). Default-deny evaluation, argument constraints, anti-escalation, zero-call guarantee.
-- **Week 4 (Completed):** Intent-to-Policy & Permission Approval. Deterministic intent parsing (EN/AR), least-privilege permission proposals, trusted approval gate, at-most-once secured execution.
-- **Week 5 (Next):** Data Provenance Tracking & Trust-Tier Isolation (tracking data origins, taint propagation, preventing untrusted content from widening authorization).
-- **Week 6:** Immutable cryptographic audit log & hash-chained execution trails.
-- **Week 7:** Anomaly detection and behavioral rate-limiting.
-- **Week 8:** Agent sandbox execution integration (MCP, local runners).
-- **Week 9:** End-to-end red-teaming and prompt-injection resistance testing.
-- **Week 10:** Production hardening, research release, and documentation.
-
-See [docs/week5-handoff.md](docs/week5-handoff.md) for the detailed engineering handoff guide for Week 5.
+The repository contains the Week 1–4 prototype: the simulated email environment, agent runtime, policy engine, and intent-to-approval workflow. The next planned milestone is data provenance and trust-tier isolation; see [the Week 5 handoff](docs/week5-handoff.md). The milestone documents under `docs/` describe the project at different points in its development and may include earlier plans or historical results.
